@@ -36,16 +36,20 @@ jobs:
           java-version: '21'
 
       - name: Write key
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/updates'  # 修改分支为 updates
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/updates'
         run: |
-          echo officialBuild=true >> local.properties
-          echo buildWithGitSuffix=true >> local.properties
-          echo storePassword='${{ secrets.KEY_STORE_PASSWORD }}' >> local.properties
-          echo keyAlias='${{ secrets.ALIAS }}' >> local.properties
-          echo keyPassword='${{ secrets.ALIAS_KEY_PASSWORD }}' >> local.properties
-          # 解码密钥库
+          # 确保 local.properties 文件存在
+          touch local.properties
+          
+          # 写入构建属性
+          echo "officialBuild=true" >> local.properties
+          echo "buildWithGitSuffix=true" >> local.properties
+          echo "storePassword='${{ secrets.KEY_STORE_PASSWORD }}'" >> local.properties
+          echo "keyAlias='${{ secrets.ALIAS }}'" >> local.properties
+          echo "keyPassword='${{ secrets.ALIAS_KEY_PASSWORD }}'" >> local.properties
+          
+          # 解码密钥库并进行格式转换
           echo "${{ secrets.KEY_STORE }}" | base64 --decode > original.jks
-          # 转换为兼容的 JKS 格式
           keytool -importkeystore \
             -srckeystore original.jks \
             -srcstorepass '${{ secrets.KEY_STORE_PASSWORD }}' \
@@ -54,8 +58,15 @@ jobs:
             -deststoretype JKS \
             -deststorepass '${{ secrets.KEY_STORE_PASSWORD }}' \
             -destkeypass '${{ secrets.ALIAS_KEY_PASSWORD }}'
-          echo fileDir=`pwd`/key.jks >> local.properties
+          
+          # 写入密钥库路径
+          echo "fileDir=$(pwd)/key.jks" >> local.properties
+          
+          # 写入 Google 服务配置文件
           echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > app/google-services.json
+          
+          # 确认文件已创建（调试用）
+          ls -la local.properties key.jks original.jks
 
       - name: Cache gradle
         uses: actions/cache@v4
@@ -68,7 +79,16 @@ jobs:
 
       - name: Gradle prebuild
         run: |
+          # 确保 gradle.properties 存在
+          touch gradle.properties
+          
+          # 添加 Gradle 配置
           echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
+          
+          # 确认文件内容（调试用）
+          cat gradle.properties
+          cat local.properties
+          
           ./gradlew prebuild
 
       - name: Build release
