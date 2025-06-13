@@ -26,12 +26,6 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Initialize local.properties
-        run: |
-          # 确保 local.properties 文件存在
-          touch local.properties
-          echo "# Auto-generated local.properties" > local.properties
-
       - name: Gradle wrapper validation
         uses: gradle/wrapper-validation-action@v3
 
@@ -41,39 +35,17 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Write key and config
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/updates'
+      - name: Write key
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         run: |
-          # 添加构建标志
-          echo "officialBuild=true" >> local.properties
-          echo "buildWithGitSuffix=true" >> local.properties
-          
-          # 添加签名配置
-          echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> local.properties
-          echo "keyAlias=${{ secrets.ALIAS }}" >> local.properties
-          echo "keyPassword=${{ secrets.ALIAS_KEY_PASSWORD }}" >> local.properties
-          
-          # 解码并转换密钥库
-          echo "${{ secrets.KEY_STORE }}" | base64 --decode > original.jks
-          keytool -importkeystore \
-            -srckeystore original.jks \
-            -srcstorepass '${{ secrets.KEY_STORE_PASSWORD }}' \
-            -srckeypass '${{ secrets.ALIAS_KEY_PASSWORD }}' \
-            -destkeystore key.jks \
-            -deststoretype JKS \
-            -deststorepass '${{ secrets.KEY_STORE_PASSWORD }}' \
-            -destkeypass '${{ secrets.ALIAS_KEY_PASSWORD }}'
-          
-          # 添加密钥库路径
-          echo "fileDir=$(pwd)/key.jks" >> local.properties
-          
-          # 添加 Google 服务配置
+          echo officialBuild=true >> local.properties
+          echo buildWithGitSuffix=true >> local.properties
+          echo storePassword='${{ secrets.KEY_STORE_PASSWORD }}' >> local.properties
+          echo keyAlias='${{ secrets.ALIAS }}' >> local.properties
+          echo keyPassword='${{ secrets.ALIAS_KEY_PASSWORD }}' >> local.properties
+          echo fileDir=`pwd`/key.jks >> local.properties
+          echo "${{ secrets.KEY_STORE }}" | base64 --decode > key.jks
           echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > app/google-services.json
-          
-          # 调试输出
-          echo "local.properties content:"
-          cat local.properties
-          ls -la
 
       - name: Cache gradle
         uses: actions/cache@v4
@@ -84,20 +56,10 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
           restore-keys: ${{ runner.os }}-gradle-
 
-      - name: Configure Gradle
-        run: |
-          # 确保 gradle.properties 存在
-          touch gradle.properties
-          echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
-          
-          # 调试输出
-          echo "gradle.properties content:"
-          cat gradle.properties
-          echo "local.properties content:"
-          cat local.properties
-
       - name: Gradle prebuild
-        run: ./gradlew prebuild
+        run: |
+          echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
+          ./gradlew prebuild
 
       - name: Build release
         id: buildRelease
